@@ -1,104 +1,63 @@
 import streamlit as st
+import pandas as pd
 
 def main():
     """
-    Główna funkcja aplikacji Streamlit dla prostego magazynu.
-    Dane są przechowywane w pamięci (lista 'magazyn') i resetują się
-    po przeładowaniu aplikacji, ponieważ nie używamy mechanizmu sesji.
+    Zmodyfikowana funkcja dla prostego magazynu z cenami, VAT-em i wizualizacją.
     """
-    st.set_page_config(layout="wide", page_title="Prosty Magazyn")
-    st.title("Prosty Magazyn 📦")
+    st.set_page_config(layout="wide", page_title="Magazyn z Wizualizacją Cen")
+    st.title("Magazyn z Wizualizacją i Wartością 📊")
     st.markdown("---")
 
-    # Inicjalizacja listy towarów (magazynu).
-    # UWAGA: Ta lista jest resetowana przy każdym przeładowaniu aplikacji
-    # (zgodnie z Twoją prośbą o nieużywanie sesji i zapisywania danych).
+    # Inicjalizacja stanu (lista resetuje się przy przeładowaniu)
     if 'magazyn' not in st.session_state:
+        # Nowa struktura: id, nazwa, ilosc, cena_zakupu, vat
         st.session_state.magazyn = []
 
     # --- Sekcja Dodawania Towaru ---
-    st.header("➕ Dodaj Nowy Towar")
+    st.header("➕ Dodaj Nowy Towar i Dane Finansowe")
     
     with st.form("dodawanie_towaru", clear_on_submit=True):
-        nazwa = st.text_input("Nazwa Towaru:", key="nazwa_input")
-        ilosc = st.number_input("Ilość:", min_value=1, step=1, value=1, key="ilosc_input")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            nazwa = st.text_input("Nazwa Towaru:", key="nazwa_input")
+            ilosc = st.number_input("Ilość:", min_value=1, step=1, value=1, key="ilosc_input")
+
+        with col2:
+            cena_zakupu = st.number_input("Cena Zakupu Netto (PLN):", min_value=0.01, step=0.01, value=10.00, format="%.2f", key="cena_zakupu_input")
+            # Proste pole dla VAT (np. 23, 8, 5)
+            vat_proc = st.number_input("Stawka VAT (%):", min_value=0, max_value=100, step=1, value=23, key="vat_input")
         
         # Przycisk dodawania
         dodaj_button = st.form_submit_button("Dodaj do Magazynu")
 
-        if dodaj_button and nazwa and ilosc:
-            # Tworzenie unikalnego identyfikatora dla prostoty
-            # W bardziej zaawansowanym systemie użyłbyś UUID
+        if dodaj_button and nazwa and ilosc and cena_zakupu >= 0 and vat_proc >= 0:
             nowy_id = len(st.session_state.magazyn) + 1
             
             nowy_towar = {
                 "id": nowy_id,
                 "nazwa": nazwa.strip(),
-                "ilosc": ilosc
+                "ilosc": ilosc,
+                "cena_zakupu": cena_zakupu,
+                "vat_proc": vat_proc
             }
             st.session_state.magazyn.append(nowy_towar)
-            st.success(f"Dodano: **{nazwa}** (Ilość: {ilosc})")
+            st.success(f"Dodano: **{nazwa}** (Ilość: {ilosc}, Netto: {cena_zakupu:.2f} PLN)")
         elif dodaj_button and not nazwa:
-             st.error("Wprowadź nazwę towaru, aby dodać go do magazynu.")
+             st.error("Wprowadź nazwę towaru.")
 
     st.markdown("---")
-
-    # --- Sekcja Aktualnego Magazynu ---
-    st.header("📋 Aktualny Stan Magazynu")
     
-    if not st.session_state.magazyn:
-        st.info("Magazyn jest pusty. Dodaj pierwszy towar powyżej.")
-    else:
-        # Konwersja listy słowników na DataFrame dla ładniejszej tabeli w Streamlit
-        import pandas as pd
-        df_magazyn = pd.DataFrame(st.session_state.magazyn)
-        
-        # Wyświetlanie danych w tabeli
-        st.dataframe(
-            df_magazyn.set_index('id').rename(columns={'nazwa': 'Nazwa Towaru', 'ilosc': 'Ilość'}), 
-            use_container_width=True
-        )
-
-    st.markdown("---")
-
-    # --- Sekcja Usuwania Towaru ---
-    st.header("➖ Usuń Towar")
+    # --- Sekcja Wizualizacji Danych i Podsumowania ---
+    st.header("📈 Analiza Magazynu")
 
     if st.session_state.magazyn:
-        # Tworzenie listy opcji do wyboru w selectbox: "ID - Nazwa Towaru"
-        opcje_do_usuniecia = {
-            f"{t['id']} - {t['nazwa']}": t['id'] 
-            for t in st.session_state.magazyn
-        }
-
-        wybrana_opcja = st.selectbox(
-            "Wybierz towar do usunięcia:",
-            options=list(opcje_do_usuniecia.keys()),
-            key="selectbox_usuwanie"
-        )
+        df_magazyn = pd.DataFrame(st.session_state.magazyn)
         
-        # Znajdowanie ID wybranego towaru
-        id_do_usuniecia = opcje_do_usuniecia.get(wybrana_opcja)
-
-        if st.button("Usuń Wybrany Towar"):
-            if id_do_usuniecia is not None:
-                # Filtracja listy: zostaw te elementy, których ID nie pasuje
-                dlugosc_przed = len(st.session_state.magazyn)
-                st.session_state.magazyn = [
-                    t for t in st.session_state.magazyn 
-                    if t['id'] != id_do_usuniecia
-                ]
-                
-                if len(st.session_state.magazyn) < dlugosc_przed:
-                    st.success(f"Usunięto: **{wybrana_opcja}**")
-                    # Ponowne uruchomienie aplikacji, aby odświeżyć tabelę i selectbox
-                    st.experimental_rerun()
-                else:
-                    st.warning("Nie udało się usunąć towaru.")
-            else:
-                st.error("Wybierz poprawny towar do usunięcia.")
-    else:
-        st.info("Brak towarów do usunięcia.")
-
-if __name__ == "__main__":
-    main()
+        # Obliczenia wartości
+        df_magazyn['wartosc_netto_jedn'] = df_magazyn['cena_zakupu']
+        df_magazyn['wartosc_vat_jedn'] = df_magazyn['cena_zakupu'] * (df_magazyn['vat_proc'] / 100)
+        df_magazyn['wartosc_brutto_jedn'] = df_magazyn['wartosc_netto_jedn'] + df_magazyn['wartosc_vat_jedn']
+        
+        df_magazyn['wartosc_netto_calosc'] = df_magazyn['
